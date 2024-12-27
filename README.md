@@ -26,6 +26,17 @@ We additionally provide three advanced usage examples of Jenga:
 * [Stress testing a feature schema](notebooks/example-schema-stresstest.ipynb)
 * [Evaluating the helpfulness of data augmentation for an image recognition task](notebooks/example-image-augmentation.ipynb)
 
+## Requirements
+
+To proceed with the installation of Jenga, the following requirements must be met:
+
+* Python between version 3.7 and 3.11 is required.
+* An operating system different from Microsoft Windows is preferable; when using Windows, WSL must be used.
+
+Both requirements are inherited from [TensorFlow](https://www.tensorflow.org/),
+respectively the [`tensorflow-data-validation` package](https://github.com/tensorflow/data-validation),
+which is required for Jenga's `validation` package extra.
+
 ## Installation
 
 The following options are possible:
