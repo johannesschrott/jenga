@@ -1,0 +1,29 @@
+jenga package
+=============
+
+Submodules
+----------
+
+jenga.basis module
+------------------
+
+.. automodule:: jenga.basis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+jenga.utils module
+------------------
+
+.. automodule:: jenga.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: jenga
+   :members:
+   :undoc-members:
+   :show-inheritance:
