@@ -642,11 +642,11 @@ class DataCorruption(ABC, Generic[T]):
 class TabularCorruption(DataCorruption):
     """Corruptions for structured tabular data."""
 
-    def __init__(self, column: str, fraction: float, sampling: str = "CAR"):
+    def __init__(self, column: str | int, fraction: float, sampling: str = "CAR"):
         """
         Args:
-            column (str):    The name of the column to perturb.
-            fraction (float):  The fraction of rows to corrupt. Must be between 0 and 1.
+            column (str | int):         The identifier of the column to perturb.
+            fraction (float):           The fraction of rows to corrupt. Must be between 0 and 1.
             sampling (str, optional):   The sampling mechanism for corruptions.
                                         Options are completely at random ('CAR'),
                                         at random ('AR'), not at random ('NAR').
@@ -707,6 +707,8 @@ class TabularCorruption(DataCorruption):
                 np.random.seed(seed)
             rows = np.random.permutation(data.index)[: int(len(data) * self.fraction)]
         elif self.sampling.endswith("NAR") or self.sampling.endswith("AR"):
+            if seed is not None:
+                np.random.seed(seed)
             n_values_to_discard = int(len(data) * min(self.fraction, 1.0))
             perc_lower_start = np.random.randint(0, len(data) - n_values_to_discard)
             perc_idx = range(perc_lower_start, perc_lower_start + n_values_to_discard)
@@ -718,6 +720,8 @@ class TabularCorruption(DataCorruption):
 
             # At Random
             elif self.sampling.endswith("AR"):
+                if seed is not None:
+                    np.random.seed(seed)
                 depends_on_col = np.random.choice(
                     list(set(data.columns) - {self.column})
                 )
