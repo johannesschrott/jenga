@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import random
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -13,13 +15,16 @@ from sklearn.metrics import (
     make_scorer,
     mean_absolute_error,
     mean_squared_error,
-    roc_auc_score
+    roc_auc_score,
 )
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from .utils import BINARY_CLASSIFICATION, MULTI_CLASS_CLASSIFICATION, REGRESSION
+
+T = TypeVar("T")
+"""A typing variable for generic superclasses."""
 
 
 class Task(ABC):
@@ -33,7 +38,7 @@ class Task(ABC):
         numerical_columns: List[str] = [],
         text_columns: List[str] = [],
         is_image_data: bool = False,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ):
         """
         Abstract base class for all Tasks. It defines the interface and a fair amount of functionality, \
@@ -71,6 +76,7 @@ class Task(ABC):
 
             try:
                 import tensorflow as tf
+
                 tf.random.set_seed(self._seed)
             except ImportError:
                 pass
@@ -85,10 +91,14 @@ class Task(ABC):
 
         task_type = None
 
-        if pd.api.types.is_numeric_dtype(self.train_labels) and pd.api.types.is_numeric_dtype(self.test_labels):
+        if pd.api.types.is_numeric_dtype(
+            self.train_labels
+        ) and pd.api.types.is_numeric_dtype(self.test_labels):
             task_type = REGRESSION
 
-        elif pd.api.types.is_categorical_dtype(self.train_labels) and pd.api.types.is_categorical_dtype(self.test_labels):
+        elif pd.api.types.is_categorical_dtype(
+            self.train_labels
+        ) and pd.api.types.is_categorical_dtype(self.test_labels):
             num_test_classes = len(self.test_labels.dtype.categories)
             num_train_classes = len(self.train_labels.dtype.categories)
 
@@ -102,7 +112,11 @@ class Task(ABC):
 
         return task_type
 
-    def fit_baseline_model(self, train_data: Optional[pd.DataFrame] = None, train_labels: Optional[pd.Series] = None) -> BaseEstimator:
+    def fit_baseline_model(
+        self,
+        train_data: Optional[pd.DataFrame] = None,
+        train_labels: Optional[pd.Series] = None,
+    ) -> BaseEstimator:
         """
         Fit a baseline model. If no data is given (default), it uses the task's train data and creates the attribute `_baseline_model`. \
             If data is given, it trains this data.
@@ -118,8 +132,12 @@ class Task(ABC):
             BaseEstimator: Trained model
         """
 
-        if (train_data is None and train_labels is not None) or (train_data is not None and train_labels is None):
-            raise ValueError("either set both parameters (train_data, train_labels) or non")
+        if (train_data is None and train_labels is not None) or (
+            train_data is not None and train_labels is None
+        ):
+            raise ValueError(
+                "either set both parameters (train_data, train_labels) or non"
+            )
 
         use_original_data = train_data is None
 
@@ -136,28 +154,37 @@ class Task(ABC):
 
         categorical_preprocessing = Pipeline(
             [
-                ('mark_missing', SimpleImputer(strategy='most_frequent')),
-                ('one_hot_encode', OneHotEncoder(handle_unknown='ignore'))
+                ("mark_missing", SimpleImputer(strategy="most_frequent")),
+                ("one_hot_encode", OneHotEncoder(handle_unknown="ignore")),
             ]
         )
 
         numerical_preprocessing = Pipeline(
             [
-                ('mark_missing', SimpleImputer(strategy='mean')),
-                ('scaling',  StandardScaler())
+                ("mark_missing", SimpleImputer(strategy="mean")),
+                ("scaling", StandardScaler()),
             ]
         )
 
-        feature_transformation = ColumnTransformer(transformers=[
-                ('categorical_features', categorical_preprocessing, self.categorical_columns),
-                ('scaled_numeric', numerical_preprocessing, self.numerical_columns)
+        feature_transformation = ColumnTransformer(
+            transformers=[
+                (
+                    "categorical_features",
+                    categorical_preprocessing,
+                    self.categorical_columns,
+                ),
+                ("scaled_numeric", numerical_preprocessing, self.numerical_columns),
             ]
         )
 
-        param_grid, pipeline, scorer = self._get_pipeline_grid_scorer_tuple(feature_transformation)
+        param_grid, pipeline, scorer = self._get_pipeline_grid_scorer_tuple(
+            feature_transformation
+        )
         refit = list(scorer.keys())[0]
 
-        search = GridSearchCV(pipeline, param_grid, scoring=scorer, n_jobs=-1, refit=refit)
+        search = GridSearchCV(
+            pipeline, param_grid, scoring=scorer, n_jobs=-1, refit=refit
+        )
         model = search.fit(train_data, train_labels).best_estimator_
 
         # only set baseline model attribute if it is trained on the original task data
@@ -211,7 +238,9 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def _get_pipeline_grid_scorer_tuple(self, feature_transformation: ColumnTransformer) -> Tuple[Dict[str, object], Any, Dict[str, Any]]:
+    def _get_pipeline_grid_scorer_tuple(
+        self, feature_transformation: ColumnTransformer
+    ) -> Tuple[Dict[str, object], Any, Dict[str, Any]]:
         """
         Forces child class to define task specific `Pipeline`, hyperparameter grid for HPO, and scorer for baseline model training.
         This helps to reduce redundant code.
@@ -238,7 +267,7 @@ class BinaryClassificationTask(Task):
         numerical_columns: List[str] = [],
         text_columns: List[str] = [],
         is_image_data: bool = False,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ):
         """
         Class that represents a binary classification task. \
@@ -266,7 +295,7 @@ class BinaryClassificationTask(Task):
             numerical_columns=numerical_columns,
             text_columns=text_columns,
             is_image_data=is_image_data,
-            seed=seed
+            seed=seed,
         )
 
         self._task_type = BINARY_CLASSIFICATION
@@ -282,12 +311,14 @@ class BinaryClassificationTask(Task):
 
         super()._check_data()
 
-        if self._get_task_type_of_data() != BINARY_CLASSIFICATION and not self.is_image_data:
+        if (
+            self._get_task_type_of_data() != BINARY_CLASSIFICATION
+            and not self.is_image_data
+        ):
             raise ValueError("Downloaded data is not a binary classification task.")
 
     def _get_pipeline_grid_scorer_tuple(
-        self,
-        feature_transformation: ColumnTransformer
+        self, feature_transformation: ColumnTransformer
     ) -> Tuple[Dict[str, object], Any, Dict[str, Any]]:
         """
         Binary classification specific default `Pipeline`, hyperparameter grid for HPO, and scorer for baseline model training.
@@ -300,21 +331,19 @@ class BinaryClassificationTask(Task):
         """
 
         param_grid = {
-            'learner__loss': ['log'],
-            'learner__penalty': ['l2'],
-            'learner__alpha': [0.00001, 0.0001, 0.001, 0.01]
+            "learner__loss": ["log"],
+            "learner__penalty": ["l2"],
+            "learner__alpha": [0.00001, 0.0001, 0.001, 0.01],
         }
 
         pipeline = Pipeline(
             [
-                ('features', feature_transformation),
-                ('learner', SGDClassifier(max_iter=1000, n_jobs=-1))
+                ("features", feature_transformation),
+                ("learner", SGDClassifier(max_iter=1000, n_jobs=-1)),
             ]
         )
 
-        scorer = {
-            "ROC/AUC": make_scorer(roc_auc_score, needs_proba=True)
-        }
+        scorer = {"ROC/AUC": make_scorer(roc_auc_score, needs_proba=True)}
 
         return param_grid, pipeline, scorer
 
@@ -328,7 +357,9 @@ class BinaryClassificationTask(Task):
 
         super().get_baseline_performance()
 
-        predicted_label_probabilities = self._baseline_model.predict_proba(self.test_data)
+        predicted_label_probabilities = self._baseline_model.predict_proba(
+            self.test_data
+        )
         return self.score_on_test_data(predicted_label_probabilities)
 
     def score_on_test_data(self, predictions: pd.array) -> float:
@@ -357,7 +388,7 @@ class MultiClassClassificationTask(Task):
         numerical_columns: List[str] = [],
         text_columns: List[str] = [],
         is_image_data: bool = False,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ):
         """
         Class that represents a multi-class classification task. \
@@ -385,7 +416,7 @@ class MultiClassClassificationTask(Task):
             numerical_columns=numerical_columns,
             text_columns=text_columns,
             is_image_data=is_image_data,
-            seed=seed
+            seed=seed,
         )
 
         self._task_type = MULTI_CLASS_CLASSIFICATION
@@ -401,12 +432,16 @@ class MultiClassClassificationTask(Task):
 
         super()._check_data()
 
-        if self._get_task_type_of_data() != MULTI_CLASS_CLASSIFICATION and not self.is_image_data:
-            raise ValueError("Downloaded data is not a multi-class classification task.")
+        if (
+            self._get_task_type_of_data() != MULTI_CLASS_CLASSIFICATION
+            and not self.is_image_data
+        ):
+            raise ValueError(
+                "Downloaded data is not a multi-class classification task."
+            )
 
     def _get_pipeline_grid_scorer_tuple(
-        self,
-        feature_transformation: ColumnTransformer
+        self, feature_transformation: ColumnTransformer
     ) -> Tuple[Dict[str, object], Any, Dict[str, Any]]:
         """
         Multi-class classification specific default `Pipeline`, hyperparameter grid for HPO, and scorer for baseline model training.
@@ -419,21 +454,19 @@ class MultiClassClassificationTask(Task):
         """
 
         param_grid = {
-            'learner__loss': ['log'],
-            'learner__penalty': ['l2'],
-            'learner__alpha': [0.00001, 0.0001, 0.001, 0.01]
+            "learner__loss": ["log"],
+            "learner__penalty": ["l2"],
+            "learner__alpha": [0.00001, 0.0001, 0.001, 0.01],
         }
 
         pipeline = Pipeline(
             [
-                ('features', feature_transformation),
-                ('learner', SGDClassifier(max_iter=1000, n_jobs=-1))
+                ("features", feature_transformation),
+                ("learner", SGDClassifier(max_iter=1000, n_jobs=-1)),
             ]
         )
 
-        scorer = {
-            "F1": make_scorer(f1_score, average="macro")
-        }
+        scorer = {"F1": make_scorer(f1_score, average="macro")}
 
         return param_grid, pipeline, scorer
 
@@ -482,7 +515,7 @@ class RegressionTask(Task):
         numerical_columns: List[str] = [],
         text_columns: List[str] = [],
         is_image_data: bool = False,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ):
         """
         Class that represents a regression task. Forces the `train_labels` and `test_labels` to be of a `numeric_dtype`.
@@ -509,7 +542,7 @@ class RegressionTask(Task):
             numerical_columns=numerical_columns,
             text_columns=text_columns,
             is_image_data=is_image_data,
-            seed=seed
+            seed=seed,
         )
 
         self._task_type = REGRESSION
@@ -529,8 +562,7 @@ class RegressionTask(Task):
             raise ValueError("Downloaded data is not a regression task.")
 
     def _get_pipeline_grid_scorer_tuple(
-        self,
-        feature_transformation: ColumnTransformer
+        self, feature_transformation: ColumnTransformer
     ) -> Tuple[Dict[str, object], Any, Dict[str, Any]]:
         """
         Regression specific default `Pipeline`, hyperparameter grid for HPO, and scorer for baseline model training.
@@ -543,21 +575,21 @@ class RegressionTask(Task):
         """
 
         param_grid = {
-            'learner__loss': ['squared_loss', 'huber'],
-            'learner__penalty': ['l2'],
-            'learner__alpha': [0.00001, 0.0001, 0.001, 0.01]
+            "learner__loss": ["squared_loss", "huber"],
+            "learner__penalty": ["l2"],
+            "learner__alpha": [0.00001, 0.0001, 0.001, 0.01],
         }
 
         pipeline = Pipeline(
             [
-                ('features', feature_transformation),
-                ('learner', SGDRegressor(max_iter=1000))
+                ("features", feature_transformation),
+                ("learner", SGDRegressor(max_iter=1000)),
             ]
         )
 
         scorer = {
             "MSE": make_scorer(mean_squared_error, greater_is_better=False),
-            "MAE": make_scorer(mean_absolute_error, greater_is_better=False)
+            "MAE": make_scorer(mean_absolute_error, greater_is_better=False),
         }
 
         return param_grid, pipeline, scorer
@@ -589,12 +621,18 @@ class RegressionTask(Task):
         return mean_squared_error(self.test_labels, predictions)
 
 
-# Abstract base class for all data corruptions
-class DataCorruption:
+class DataCorruption(ABC, Generic[T]):
+    """Abstract base class for all data corruptions"""
 
-    # Abstract base method for corruptions, they have to return a corrupted copied of the dataframe
     @abstractmethod
-    def transform(self, data):
+    def transform(self, data: T) -> T:
+        """Abstract base method for corruptions.
+
+        Args:
+            data (T): The data to corrupt.
+
+        Returns:
+            T: A corrupted copy of the data."""
         pass
 
     def __str__(self):
@@ -602,45 +640,88 @@ class DataCorruption:
 
 
 class TabularCorruption(DataCorruption):
-    def __init__(self, column, fraction, sampling='CAR'):
-        '''
-        Corruptions for structured data
-        Input:
-        column:    column to perturb, string
-        fraction:   fraction of rows to corrupt, float between 0 and 1
-        sampling:   sampling mechanism for corruptions, options are completely at random ('CAR'),
-                     at random ('AR'), not at random ('NAR')
-        '''
+    """Corruptions for structured tabular data."""
+
+    def __init__(self, column: str, fraction: float, sampling: str = "CAR"):
+        """
+        Args:
+            column (str):    The name of the column to perturb.
+            fraction (float):  The fraction of rows to corrupt. Must be between 0 and 1.
+            sampling (str, optional):   The sampling mechanism for corruptions.
+                                        Options are completely at random ('CAR'),
+                                        at random ('AR'), not at random ('NAR').
+                                        Defaults to `CAR`.
+
+        Raises:
+            ValueError:  If :paramref:`fraction` is not between 0 and 1.
+        """
+        if fraction < 0 or fraction > 1:
+            ValueError(
+                "The provided fraction of rows to corrupt lies outside of 0 and 1."
+            )
+
         self.column = column
         self.fraction = fraction
         self.sampling = sampling
 
-    def get_dtype(self, df):
+    def get_dtype(self, df: pd.DataFrame) -> Tuple[list, list]:
+        """
+        Args:
+            df (pandas.DataFrame): The :any:`pandas.DataFrame` of which the list of columns containing numeric and
+             non-numeric values should be retrieved.
+        Returns:
+            tuple[list, list]: A tuple containing the list of columns containing numeric values (index 0) and non-numeric values (index 1).
+        """
         numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
         non_numeric_cols = [c for c in df.columns if c not in numeric_cols]
         return numeric_cols, non_numeric_cols
 
-    def sample_rows(self, data):
+    def sample_rows(
+        self,
+        data: pd.DataFrame,
+        seed: int | float | None = None,
+    ) -> pd.Index:
+        """Select indices of the rows in :paramref:`data` that should be polluted.
+        The sampling technique used for the pollution is defined in the
+        :paramref:`sampling` attribute of the object.
 
+        Args:
+            data (pandas.DataFrame): The :any:`pandas.DataFrame` based on which the indices of the rows to pollute
+                                     will be determined.
+            seed (int | float | None, optional): The seed for the random operations.
+                                                 Defaults to :any:`None`, which means no seed is used.
+
+        Returns:
+            pandas.Index: An :any:`pandas.Index` that references the rows to be polluted.
+
+        Raises:
+            ValueError: If the value of the  :paramref:`sampling`
+                        attribute is neither 'CAR', 'AR', or 'NAR'.
+        """
         if self.fraction == 1.0:
+            # if 100 percent of the rows should be polluted
             rows = data.index
         # Completely At Random
-        elif self.sampling.endswith('CAR'):
-            rows = np.random.permutation(data.index)[:int(len(data)*self.fraction)]
-        elif self.sampling.endswith('NAR') or self.sampling.endswith('AR'):
+        elif self.sampling.endswith("CAR"):
+            if seed is not None:
+                np.random.seed(seed)
+            rows = np.random.permutation(data.index)[: int(len(data) * self.fraction)]
+        elif self.sampling.endswith("NAR") or self.sampling.endswith("AR"):
             n_values_to_discard = int(len(data) * min(self.fraction, 1.0))
             perc_lower_start = np.random.randint(0, len(data) - n_values_to_discard)
             perc_idx = range(perc_lower_start, perc_lower_start + n_values_to_discard)
 
             # Not At Random
-            if self.sampling.endswith('NAR'):
-                # pick a random percentile of values in this column
+            if self.sampling.endswith("NAR"):
+                # pick a random percentile of the values in the selected column based on which the rows will be polluted
                 rows = data[self.column].sort_values().iloc[perc_idx].index
 
             # At Random
-            elif self.sampling.endswith('AR'):
-                depends_on_col = np.random.choice(list(set(data.columns) - {self.column}))
-                # pick a random percentile of values in other column
+            elif self.sampling.endswith("AR"):
+                depends_on_col = np.random.choice(
+                    list(set(data.columns) - {self.column})
+                )
+                # pick a random percentile of values in other column based on which the rows will be polluted
                 rows = data[depends_on_col].sort_values().iloc[perc_idx].index
 
         else:

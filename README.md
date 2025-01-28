@@ -121,3 +121,11 @@ For details and usage information on PyScaffold see https://pyscaffold.org/.
 [Google style]: http://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
 
 [dsproject extension]: https://github.com/pyscaffold/pyscaffoldext-dsproject
+
+## Acknowledgement
+
+The modifications and additions to the missing value data corruption have been funded by BMK, BMAW, and the State of
+Upper Austria in the frame of the SCCH competence center INTEGRATE (FFG grant no. 892418)
+part of the FFG COMET Competence
+Centers for Excellent Technologies Programme and by the “ICT of
+the Future” project QuanTD (no. 898626).
