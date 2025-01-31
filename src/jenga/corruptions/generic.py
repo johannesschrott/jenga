@@ -34,6 +34,7 @@ class MissingValues(TabularCorruption):
                                         Defaults to :any:`None`, which means no seed is used.
             deps (list):                A list of columns the selected :paramref:`column` depends on.
                                         Required for sampling mechanism that involve domain-knowledge.
+                                        TODO: Set?
 
         Raises:
             ValueError:  If :paramref:`fraction` is not between 0 and 1, or if :paramref:`missingness` contains an
@@ -83,17 +84,20 @@ class MissingValues(TabularCorruption):
                 raise ValueError(
                     "No list of dependencies was provided for the domain-knowledge based introduction of missing values."
                 )
-            if self.sampling == "MNAR_DK":
-                deps.insert(0, self.column)
-            if self.seed is not None:
-                np.random.seed(self.seed)
-            n_values_to_discard = int(len(data) * min(self.fraction, 1.0))
-            perc_lower_start = np.random.randint(0, len(data) - n_values_to_discard)
-            perc_idx = range(perc_lower_start, perc_lower_start + n_values_to_discard)
+            elif len(deps) > 0:
+                if self.sampling == "MNAR_DK":
+                    deps.insert(0, self.column)
+                if self.seed is not None:
+                    np.random.seed(self.seed)
+                n_values_to_discard = int(len(data) * min(self.fraction, 1.0))
+                perc_lower_start = np.random.randint(0, len(data) - n_values_to_discard)
+                perc_idx = range(
+                    perc_lower_start, perc_lower_start + n_values_to_discard
+                )
 
-            # pick a random percentile of values in other column based on which the rows will be polluted
-            rows = data[deps].sort_values(deps).iloc[perc_idx].index
-            corrupted_data.loc[rows, [self.column]] = self.na_value
+                # pick a random percentile of values in other column based on which the rows will be polluted
+                rows = data[deps].sort_values(deps).iloc[perc_idx].index
+                corrupted_data.loc[rows, [self.column]] = self.na_value
 
         return corrupted_data
 
