@@ -140,3 +140,30 @@ def test_mnar_dk(dataFrame_10x10: pd.DataFrame):
         .sum()
         == 5
     )
+
+
+def test_mcar_row(dataFrame_10x10: pd.DataFrame):
+    assert (
+        MissingValues(column=1, fraction=0.5, missingness="MCAR_ROW", seed=SEED)
+        .transform(dataFrame_10x10)
+        .equals(
+            MissingValues(
+                column=1, fraction=0.5, missingness="MCAR_ROW", seed=SEED
+            ).transform(dataFrame_10x10)
+        )
+    )
+    assert (
+        MissingValues(column=1, fraction=0.5, missingness="MCAR_ROW", seed=SEED)
+        .transform(dataFrame_10x10)
+        .isna()
+        .sum()
+        .sum()
+        == 50
+    )
+
+
+def test_invalid_missingness(dataFrame_10x10: pd.DataFrame):
+    with pytest.raises(ValueError):
+        MissingValues(
+            column=1, fraction=0.5, missingness="JENGA", seed=SEED
+        )  # JENGA is not a valid missingness technique

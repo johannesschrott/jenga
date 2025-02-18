@@ -11,7 +11,7 @@ class MissingValues(TabularCorruption):
 
     def __init__(
         self,
-        column: str | int,
+        column: str | int | None,
         fraction: float,
         na_value: float = np.nan,
         missingness: str = "MCAR_COL",
@@ -21,13 +21,39 @@ class MissingValues(TabularCorruption):
         """
         Missing value corruptions for structured data.
 
+        Depending on the value of :paramref:`missingness`, calling :any:`transform`, works differently:
+
+        * **MCAR_COL** *(deprecated: MCAR)* In the column to perturb (defined using :paramref:`column`),
+          values are randomly removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction`.
+        * **MCAR_TAB**  In the whole table
+          values are randomly removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction`.
+        * **MCAR_ROW** In each row of the table
+          values are randomly removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction`.
+        * **MAR_RAND** *(deprecated: MAR)* In the column to perturb (defined using :paramref:`column`),
+          values are removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction` based on the values of a randomly chosen other column.
+        * **MNAR_SELF** *(deprecated: MNAR)* In the column to perturb (defined using :paramref:`column`),
+          values are removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction` based on the values of the column to perturb.
+        * **MAR_DK** In the column to perturb (defined using :paramref:`column`),
+          values are removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction` based on provided dependencies.
+        * **MNAR_DK** In the column to perturb (defined using :paramref:`column`),
+          values are removed, i.e, replaced by :paramref:`na_value`,
+          according to the provided :paramref:`fraction` based on provided dependencies and the column to perturb.
+
         Args:
             column (str | int):         The identifier of the column to pollute with missing values
             fraction (float):           The fraction of rows to corrupt. Must be between 0 and 1.
             na_value (float, optional): The value that represents a missing value, defaults to :any:`numpy.nan`
             missingness (str):          The sampling mechanism used for the missing values.
                                         Must be a value of
-                                        ['MCAR_COL', 'MAR_RAND', 'MNAR_SELF', 'MCAR_TAB', 'MAR_DK', 'MNAR_DK'].
+                                        ['MCAR_COL', 'MAR_RAND', 'MNAR_SELF',
+                                        'MCAR_TAB', 'MAR_DK', 'MNAR_DK',
+                                        'MCAR_ROW'].
                                         Deprecated values: ['MCAR', 'MAR', 'MNAR'].
                                         Defaults to `MCAR_COL`.
             seed (int | float | None, optional): The seed for the random operations.
@@ -37,9 +63,27 @@ class MissingValues(TabularCorruption):
                                         TODO: Set?
 
         Raises:
-            ValueError:  If :paramref:`fraction` is not between 0 and 1, or if :paramref:`missingness` contains an
-                         unsupported value.
+            ValueError: Raised if :paramref:`fraction` is not between 0 and 1,
+                        or if :paramref:`missingness` contains an unsupported value.
         """
+        if missingness not in [
+            "MCAR",
+            "MAR",
+            "MNAR",
+            "MCAR_COL",
+            "MAR_RAND",
+            "MNAR_SELF",
+            "MCAR_TAB",
+            "MAR_DK",
+            "MNAR_DK",
+            "MCAR_ROW",
+        ]:
+            raise ValueError("Unsupported kind of missingness: {}".format(missingness))
+        if column is None and missingness not in ["MCAR_ROW", "MCAR_TAB"]:
+            raise ValueError(
+                f"For the selected missingness ({missingness}), a column to perturb must be provided."
+            )
+
         super().__init__(column, fraction, sampling=missingness)
 
         self.na_value: float = na_value
@@ -57,11 +101,11 @@ class MissingValues(TabularCorruption):
             "MNAR_SELF",
         ]:
             if self.sampling == "MCAR_COL":
-                self.sampling = "MCAR"
+                self.sampling = "MCAR"  # The sampling mechanism previously called "MCAR" is now called "MCAR COL".
             elif self.sampling == "MAR_RAND":
-                self.sampling = "MAR"
+                self.sampling = "MAR"  # The sampling mechanism previously called "MAR" is now called "MAR RAND".
             elif self.sampling == "MNAR_SELF":
-                self.sampling = "MNAR"
+                self.sampling = "MNAR"  # The sampling mechanism previously called "MNAR" is now called "MNAR SELF".
             # Replace the values in the selected column (self.column) by self.na_value in the records specified in rows.
             rows: pd.Index = self.sample_rows(corrupted_data, self.seed)
             corrupted_data.loc[rows, [self.column]] = self.na_value
@@ -98,6 +142,32 @@ class MissingValues(TabularCorruption):
                 # pick a random percentile of values in other column based on which the rows will be polluted
                 rows = data[deps].sort_values(deps).iloc[perc_idx].index
                 corrupted_data.loc[rows, [self.column]] = self.na_value
+        elif self.sampling == "MCAR_ROW":
+
+            def remove_values_in_row(row: pd.Series) -> pd.Series:
+                polluted_row = row.copy(deep=True)
+                element_indices = np.arange(len(row))
+
+                if self.seed is not None:
+                    np.random.seed(
+                        int(
+                            pd.util.hash_pandas_object(row, hash_key=self.seed)[0]
+                            % (2**32)
+                        )
+                    )  # The seed is computed based on the hash of the row to pollute
+                    # --> otherwise all rows would be polluted equally.
+                    # 2**32 is the greatest possible seed. Since hashes may be larger, modulo is performed
+
+                indices_to_pollute = np.random.permutation(element_indices)[
+                    : int(len(row) * self.fraction)
+                ]
+
+                polluted_row.iloc[indices_to_pollute] = self.na_value
+                return polluted_row
+
+            corrupted_data = corrupted_data.apply(
+                remove_values_in_row, axis=1, result_type="broadcast"
+            )
 
         return corrupted_data
 
