@@ -150,10 +150,7 @@ class MissingValues(TabularCorruption):
 
                 if self.seed is not None:
                     np.random.seed(
-                        int(
-                            pd.util.hash_pandas_object(row, hash_key=self.seed)[0]
-                            % (2**32)
-                        )
+                        int(pd.util.hash_pandas_object(row).iloc[0] % (2**32))
                     )  # The seed is computed based on the hash of the row to pollute
                     # --> otherwise all rows would be polluted equally.
                     # 2**32 is the greatest possible seed. Since hashes may be larger, modulo is performed
@@ -165,9 +162,7 @@ class MissingValues(TabularCorruption):
                 polluted_row.iloc[indices_to_pollute] = self.na_value
                 return polluted_row
 
-            corrupted_data = corrupted_data.apply(
-                remove_values_in_row, axis=1, result_type="broadcast"
-            )
+            corrupted_data = corrupted_data.apply(remove_values_in_row, axis=1)
 
         return corrupted_data
 
